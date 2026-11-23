@@ -199,35 +199,55 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({
+            "error": "bad_request",
+            "message": "Send a JSON object with text and creator_id fields.",
+        }), 400
+
     text = payload.get("text")
     creator_id = payload.get("creator_id", "unknown")
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({
+            "error": "bad_request",
+            "message": "Send JSON with a non-empty \"text\".",
+        }), 400
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return jsonify({
+            "error": "bad_request",
+            "message": "Send a non-empty string for \"creator_id\".",
+        }), 400
 
-        
-    # Step 3 - one real signal that we first tested from the terminal
-    # python detector.py "some text"
+    # Milestone 3 wires in only signal one. Confidence and label stay explicit
+    # placeholders until the combining rule and label mapping are built.
     import detector
-    model_score = detector.model_signal(text)
-    # Step 4 - log the decision. The content_id is what /appeal needs later.
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError as exc:
+        return jsonify({"error": "bad_request", "message": str(exc)}), 400
+    except detector.DetectorUnavailable as exc:
+        return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
+
     content_id = f"c_{uuid.uuid4().hex[:12]}"
+    guess = "unsure"
+    confidence = 0.5
+    label = "Signal one only; final label not implemented yet."
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
+        guess=guess,
         model_score=model_score,
         status="decided",
     )
-    # Step 2 - JSON goes in: pull text and creator_id out of the body
-    if not isinstance(text, str) or not text.strip():
-        return jsonify({"error": "bad_request", "message": "Send JSON with a non-empty \"text\"."}), 400
-    # Step 1 - to get the route working without any logic
     return jsonify({
-            "content_id": "hardcoded",
-            "guess": "unsure",
-            "confidence": 0.5,
-            "label": "not built yet",
-            "model_score": None,
-            "style_score": None,
-        }), 200
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+        "style_score": None,
+    }), 200
 
 
 @app.post("/appeal")

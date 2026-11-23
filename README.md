@@ -180,8 +180,24 @@ in the unsure range.
 
 ## Sample Run
 
-<!-- One submission and one appeal, pasted as text: the request, the response,
-     and the log entries. -->
+<!-- Milestone 3 evidence: one submission and the audit log response.
+     The appeal example is completed in Milestone 5. -->
+
+### First signal on its own
+
+I ran `detector.py` separately on the three instructor-provided samples before
+wiring it into `/submit`. Higher `model_signal` means more predictable to GPT-2
+and more AI-like to this signal.
+
+| Sample | Perplexity | Model signal |
+|---|---:|---:|
+| `borderline` | 66.5 | 0.3489 |
+| `clearly_ai` | 22.3 | 0.7544 |
+| `clearly_human` | 51.7 | 0.4445 |
+
+The clearly AI sample scored highest, but the clearly human sample scored
+higher than the borderline one. This is one model signal only; its scores do
+not prove authorship or fully separate the three categories.
 
 **A submission**
 
@@ -193,12 +209,26 @@ in the unsure range.
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "Time management matters more than people admit, especially now that work moves as fast as it does. If you\u0027re organised you hit deadlines, and you\u0027re less frazzled doing it. A few things actually help. Prioritise — work out what genuinely matters and do that first. Cut the interruptions; notifications wreck focus and the damage is worse than it feels at the time. And take breaks, short ones, often.", "creator_id": "demo_instructor"}'
 ```
 
 ```json
-
+{
+  "confidence": 0.5,
+  "content_id": "c_95fdf8c7a458",
+  "guess": "unsure",
+  "label": "Signal one only; final label not implemented yet.",
+  "model_score": 0.3489,
+  "style_score": null
+}
 ```
+
+I also sent the `clearly_ai` and `clearly_human` request bodies to `/submit`
+with `creator_id` set to `demo_instructor`. Their `model_score` values were
+`0.7544` and `0.4445`; all three responses had placeholder confidence `0.5`,
+guess `unsure`, and label `Signal one only; final label not implemented yet.`
+The borderline response above was captured with live `curl` and returned HTTP
+200.
 
 **An appeal**
 
@@ -219,8 +249,48 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 3,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "c_c2e53816811c",
+      "creator_id": "demo_instructor",
+      "guess": "unsure",
+      "label": null,
+      "model_score": 0.7544,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-23T02:31:37+00:00"
+    },
+    {
+      "combined_score": null,
+      "content_id": "c_bdd36187626c",
+      "creator_id": "demo_instructor",
+      "guess": "unsure",
+      "label": null,
+      "model_score": 0.4445,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-23T02:31:37+00:00"
+    },
+    {
+      "combined_score": null,
+      "content_id": "c_95fdf8c7a458",
+      "creator_id": "demo_instructor",
+      "guess": "unsure",
+      "label": null,
+      "model_score": 0.3489,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-23T02:36:42+00:00"
+    }
+  ]
+}
 ```
+
+This `/log` response was also captured with live `curl` and returned HTTP 200;
+it contains the `content_id` from the successful submission above.
 
 ---
 
