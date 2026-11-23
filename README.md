@@ -93,22 +93,19 @@ An unknown content ID or invalid request should return HTTP 400 with `error` and
 
 ### False-positive trace — threshold design scenario
 
-Maya is a real writer who writes a short, plain-English update herself. The
-ordinary vocabulary and predictable sentence patterns make the detector treat
-her writing as AI-like. In this design scenario, her combined score is **0.68**.
+In this design scenario, Maya writes a short, plain-English update herself.
+The ordinary vocabulary and predictable sentence patterns make the detector
+treat her writing as AI-like. Her combined score is **0.68**.
 With the current AI threshold of **0.65**, the service would return the
 high-confidence AI label: **“We think this was probably written by AI.”** That
 would be a false positive: the score describes the text's patterns, not who
 wrote it. Maya can submit an appeal with the returned `content_id` and explain
-that she wrote it; the intended appeal flow records the appeal and changes its
-status to `under_review`.
+that she wrote it; `/appeal` records the appeal with `under_review` status.
 
-This score and label are illustrative, not a measured false positive. `/submit`
-now returns both signals and their combined score, but the final label mapping
-and `/appeal` are still to come. This scenario makes the cost of a narrow
-unsure band concrete: a plain-writing human may be accused. The threshold
-decision should favor avoiding that accusation, even if more AI writing lands
-in the unsure range.
+This score and label are illustrative, not a measured false positive. The
+scenario makes the cost of a narrow unsure band concrete: a plain-writing
+human may be accused. The threshold decision favors avoiding that accusation,
+even if more AI writing lands in the unsure range.
 
 
 ---
@@ -142,7 +139,10 @@ in the unsure range.
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:** Take the weighted average of the two signals. When they disagree, the combined score moves toward the middle, reflecting uncertainty instead of letting either signal decide on its own.
+**The rule:** The combining rule is implemented in
+`scoring.py::combine_signals`. It takes the weighted average of the two
+signals. When they disagree, the combined score moves toward the middle,
+reflecting uncertainty instead of letting either signal decide on its own.
 
 **The numbers:** `0.5 × model_score + 0.5 × style_score`. Each signal has equal weight.
 
@@ -399,15 +399,15 @@ original decision, with the same `content_id` and `under_review` status.
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Convert the logs and outputs into README Sections
+- *What came back:* Reviews of the output worded into the calibration results output
+- *What I changed:* Some of the formatting that didn't sound right to me, and I also asked questions for an inconsistency that was clarified.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Run the curl logs
+- *What came back:* Execution requests for curl terminal commands to test run with the provided text examples
+- *What I changed:* Didn't change anything since it was just a curl command execution.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
