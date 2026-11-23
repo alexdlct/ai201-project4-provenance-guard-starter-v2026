@@ -772,21 +772,52 @@ empty text, but has no maximum-length check, so the 10,001-character request
 reaches both signals and is logged as a completed decision. These are baseline
 measurements; no fixes were made before recording them.
 
-**Diagnoses**
+**Criterion decisions and diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+- **Criterion 1 — MET.** One of ten personal samples was labeled high-confidence
+  AI in every trial, exactly the allowed maximum. The ninth line produced a
+  combined score of 0.6591 and crossed the 0.65 AI threshold.
+- **Criterion 2 — MISSED.** At the signal and combining stages, the two
+  clearly-AI examples averaged 0.5863 while the two clearly-human examples
+  averaged 0.4505, a 0.1359 gap rather than 0.20. The formal human example
+  scored 0.5421, close to both AI examples; equal weighting of the model and
+  style signals leaves too much overlap for this target.
+- **Criterion 3 — MISSED.** The label mapping uses 0.35 and 0.65 cutoffs.
+  All three calibration scores (0.5880, 0.3588, and 0.3537) landed between
+  them, so each was labeled unsure. The signal combination compresses these
+  examples into the unsure band; the fixed threshold bands therefore did not
+  demonstrate all three labels.
+- **Criterion 4 — MET.** The appeal route returned `under_review` for all ten
+  submissions in each trial, and all 30 appeal content IDs were present in the
+  audit log with appeal events.
+- **Criterion 5 — MISSED.** The route rejected missing and empty text with 400,
+  but accepted the 10,001-character sample with 200. There is no maximum-length
+  check before the signals run, so the request was scored and logged as a
+  completed decision.
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+**Diagnoses for the broken attack rows**
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+| Broken IDs | Stage | Mechanism observed |
+|---|---|---|
+| EV01 | Signal one, then combining rule and label mapping | Misspellings make the text less predictable to GPT-2: model score 0.1635. The style score was 0.4941 and did not offset it; the 0.3288 combined score fell below the 0.35 human cutoff. The text was labeled human. |
+| EV08 | Route, signal one, then label mapping | The route accepts a very short two-sentence submission. Its model and style scores were both low (0.2452 and 0.3444), producing 0.2948 and a human label. The service has no minimum useful text length. |
+| FP02, FP03, FP04, FP05, FP06, FP07 | Signal one, combining rule, and label mapping | Predictable formal, rubric-based, technical, templated, or deliberately repetitive human prose received model scores from 0.7387 to 0.8816. The style scores (0.4688–0.5689) did not pull the equal-weight average below 0.65, so the label mapping called all six AI. This is the same costly false-positive pattern seen at the limit in criterion 1. |
+| PI02 | Signal inputs, combining rule, and label mapping | The detector does not follow the embedded instruction; it scores the whole submitted string as text. This request happened to receive low model and style scores (0.2044 and 0.3201), averaging 0.2622 and producing the requested human label. The result shows the instruction-shaped input was not distinguished from the writing; it does not establish that the instruction caused the score. |
+| MF03 | Route and signal fallbacks | NUL/control bytes and an ANSI color sequence pass the route's non-empty-string check. The tokenizer sees only a few ASCII fragments; the model returns 0.0000 and stylometry returns 0.3333. Their average becomes a confident-looking 0.1666 human result instead of a rejection. |
+| MF04 | Route and signal two | Punctuation-only text passes validation. The word-based style measures treat the absent vocabulary as zero variety and no punctuation-per-word, yielding the maximum style score of 1.0000. The model score is 0.0112; the conflicting average produces an unsure label, but malformed input still became a scored decision. |
+| MF05 | Route, signals, combining rule, and label mapping | A single 4,000-character token is accepted as writing. GPT-2 splits it into predictable subword tokens and scores it at 0.9976; the one-sentence style measures produce 0.6667. The combined 0.8321 is labeled AI. The route has no check that the input contains usable prose. |
+| MF06 | Route and both signals | Emoji-only input is accepted. The model assigns 0.9969 and the style signal returns 1.0000 because its word-based measures have no ordinary tokens; the combination is 0.9985 and is labeled AI. There is no route check for meaningful text. |
+| MF07 | Route, signal two, combining rule, and label mapping | The style tokenizer only extracts ASCII letters and digits, so it sees no words in this right-to-left sample and returns 1.0000. The model score is 0.9064; together they produce an AI label for text the style measure did not actually characterize. |
+| MF08 | Route and signal one | The route accepts 60,000 characters. The model signal truncates at its configured 400-token window while the style signal processes the full input; scores of 0.9876 and 0.7685 yield an AI label. No route length cap prevents scoring and logging an oversized submission. |
+| RQ02 | Route and audit identity | The route substitutes `unknown` when `creator_id` is absent and only validates the ID when the key exists. It therefore returns 200 and records a decision without the required writer identity. |
+| FL01_01–FL01_10 | Route rate limiter | Each first-ten request returned 200 because the configured limit permits ten submissions per creator per minute. These rows are marked BROKE as individual requests that reached the service; this is expected allowance, not a limiter defect. The batch was only partially contained: requests 11 and 12 were rejected with 429, so an attacker can still submit ten times inside the window. |
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+The 26 broken rows cluster around four causes: predictable human prose crossing
+the AI cutoff; low-scoring or unsupported text being accepted as ordinary
+writing; a prompt-shaped string receiving an ordinary heuristic score; and the
+ten requests intentionally allowed by the per-minute limit. No service crash
+or 5xx occurred. These are diagnoses of the baseline; I made no fixes before
+recording it.
 
 
 
