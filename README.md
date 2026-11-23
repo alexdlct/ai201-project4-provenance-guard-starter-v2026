@@ -937,7 +937,7 @@ The oversized request also appears as a rejection, not a completed decision, in
 
 **Did it help, and how do I know:**
 
-Yes. Criterion 5 moved from 2/3 rejected inputs to 3/3 in all three trials, and MF08 changed from BROKE to HELD. The other 55 attack outcomes and criteria 1–4 were unchanged. This is a single measured improvement, not a general fix for malformed input.
+Yes. Criterion 5 moved from 2/3 rejected inputs to 3/3 in all three trials, and MF08 changed from BROKE to HELD. The other 55 attack outcomes and criteria 1–4 were unchanged. This is a single measured improvement, not a general fix for malformed input. The cap also means legitimate submissions over 10,000 characters must be shortened or split.
 
 <!-- Widening the unsure band usually fixes one problem and creates another.
      Reporting that trade honestly is worth full credit. -->
@@ -948,11 +948,21 @@ Yes. Criterion 5 moved from 2/3 rejected inputs to 3/3 in all three trials, and 
 
 ## What’s Still Broken
 
-The score-spread target still misses by 0.0641: the measured gap is 0.1359 instead of 0.20. Label coverage still reaches only unsure for the three calibration examples. The false-positive attack rows FP02–FP07, evasion rows EV01 and EV08, PI02, malformed rows MF03–MF07 and RQ02, and the first ten flood requests still have BROKE verdicts. Their stage-level diagnoses remain above; no second change was made.
+The following failures remain. I stopped after the one measured change required for this milestone; each additional fix needs its own before-and-after run.
+
+- **Criterion 2 — score spread:** The gap remains 0.1359 instead of 0.20. Next I would collect a larger labeled calibration set and compare the two signal distributions before changing their weights. I stopped because changing the combining rule would be a second intervention and could worsen the false-positive rate, which already sits at its allowed limit.
+- **Criterion 3 — label coverage:** All three calibration examples still land in unsure. Next I would add clearly human and clearly AI calibration samples, then tune the thresholds against those and the personal-writing set. I stopped because moving either threshold without more examples could make the single allowed false positive worse or make AI text harder to flag.
+- **FP02–FP07 — formal, careful, technical, templated, and repetitive human writing:** These still cross the AI threshold. Next I would test a wider unsure band against a larger human calibration set. I stopped because that changes the false-positive/AI-miss trade and would need its own three-trial measurement.
+- **EV01 — typos; EV08 — very short text:** EV01 still scores human after misspellings lower the model score; I would test typo-robust signal handling. EV08 still scores human on a tiny sample; I would define and test a minimum useful text length. I stopped because both require changes beyond the selected length cap and need separate checks against legitimate short writing.
+- **PI02 — instruction-shaped text:** It still receives a human label, but the run cannot show that the embedded instruction caused it. Next I would compare the same prose with and without the instruction before considering a defense. I stopped rather than add a prompt-specific rule without causal evidence.
+- **MF03–MF06 — control characters, punctuation, a single long token, and emoji:** These inputs still pass the non-empty check and receive scores from degenerate or unsupported signal inputs. Next I would make the route reject text with no minimum amount of usable lexical content. I stopped because input validation beyond the 10,000-character cap is another change and needs care so unusual but valid writing is not rejected.
+- **MF07 — right-to-left text:** The ASCII-only stylometry tokenizer still gives this valid script an uninformative score. Next I would make the tokenization Unicode- and language-aware and recalibrate it. I stopped because rejecting non-English writing would harm writers, and changing the signal requires a separate calibration run.
+- **RQ02 — missing `creator_id`:** The route still accepts this request and records it as `unknown`. Next I would require a non-empty creator ID to match the documented request contract. I stopped because it is a separate contract-validation fix from the text-length change.
+- **FL01_01–FL01_10 — first ten flood requests:** These still reach `/submit`; requests 11 and 12 are correctly rate-limited. Next I would lower the per-minute allowance only if ten requests per minute proves too permissive for the product. I stopped because the first ten are within the limit we chose and justified, so changing it without a new usability target would be arbitrary.
 
 **The trade I’d make if this ran for real:**
 
-The 10,000-character cap can reject a legitimate long submission, so that writer must shorten it or split it, which may change how the text scores. I accept that friction to keep oversized requests out of the model and audit decisions; writers with long-form work bear the cost.
+I would widen the unsure band to reduce false accusations, even though more AI-written work would then receive an unsure or human result. The site and readers who rely on AI detection would bear those missed detections; I would accept that cost because a false accusation directly harms a real writer.
 
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
