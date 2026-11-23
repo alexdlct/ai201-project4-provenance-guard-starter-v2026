@@ -693,18 +693,84 @@ happened. In the flood family, ten of its twelve same-creator requests returned
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. Human false positives | At most 1 of 10 personal writing samples is labeled high-confidence AI in each trial. | 1/10 | 1/10 | 1/10 | MET |
+| 2. Score spread | Clearly-AI mean combined score at least 0.20 above clearly-human mean. | AI 0.5863 vs human 0.4505 (gap 0.1359) | Same | Same | MISSED all 3 |
+| 3. Label coverage | All three labels appear in the fixed calibration set in every trial. | unsure only (1/3 labels) | unsure only (1/3 labels) | unsure only (1/3 labels) | MISSED all 3 |
+| 4. Appeal path | 10/10 valid appeals return `under_review` and are logged per trial. | 10/10; all logged | 10/10; all logged | 10/10; all logged | MET |
+| 5. Bad input | Missing, empty, and >10,000-character text each return 400 without a decision. | 2/3 rejected; oversized accepted | Same | Same | MISSED all 3 |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+All five criteria were executed with `run_eval.py::main` against
+`app.py::submit`; appeal requests used `app.py::appeal`. The runner records the
+real response fields and generated content IDs. Full JSON output for every
+trial is in [results/run_2026-11-22_2043_before.md](results/run_2026-11-22_2043_before.md).
+
+**Real output from Run 1 for each criterion** (recorded by
+`run_eval.py::main`):
+
+Criterion 1 — `app.py::submit` response fields for the ten personal writing samples:
 
 ```json
-
+[
+  {"confidence": 0.4249, "content_id": "c_bdf98efe9ded", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.2446, "style_score": 0.6053},
+  {"confidence": 0.3829, "content_id": "c_70e8ad75e86b", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.1892, "style_score": 0.5766},
+  {"confidence": 0.5309, "content_id": "c_b459f810010c", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.3891, "style_score": 0.6727},
+  {"confidence": 0.2562, "content_id": "c_fcdf976b873d", "guess": "human", "label": "We think this was probably written by a person.", "model_score": 0.0798, "style_score": 0.4327},
+  {"confidence": 0.4565, "content_id": "c_529653bd4962", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.4901, "style_score": 0.4229},
+  {"confidence": 0.5115, "content_id": "c_3029589fe056", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.5208, "style_score": 0.5023},
+  {"confidence": 0.5979, "content_id": "c_1af10e3347cc", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.6012, "style_score": 0.5946},
+  {"confidence": 0.4083, "content_id": "c_28c61e05bdad", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.4598, "style_score": 0.3567},
+  {"confidence": 0.6591, "content_id": "c_d751b9bb5aa9", "guess": "ai", "label": "We think this was probably written by AI. This can be wrong; if you wrote it, you can appeal.", "model_score": 0.7273, "style_score": 0.591},
+  {"confidence": 0.4852, "content_id": "c_0089c16c49b3", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.495, "style_score": 0.4754}
+]
 ```
+
+Criterion 2 — `app.py::submit` response fields:
+
+```json
+[
+  {"confidence": 0.588, "content_id": "c_60a06d57aac0", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.7544, "style_score": 0.4216},
+  {"confidence": 0.3588, "content_id": "c_bf8d2396213a", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.4445, "style_score": 0.273},
+  {"confidence": 0.542, "content_id": "c_48d96de057bd", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.5263, "style_score": 0.5578},
+  {"confidence": 0.5846, "content_id": "c_5ade78a6346b", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.762, "style_score": 0.4071}
+]
+```
+
+Criterion 3 — `app.py::submit` response fields:
+
+```json
+[
+  {"confidence": 0.588, "content_id": "c_fb118ab6174b", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.7544, "style_score": 0.4216},
+  {"confidence": 0.3588, "content_id": "c_16b644c108ab", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.4445, "style_score": 0.273},
+  {"confidence": 0.3537, "content_id": "c_71d43fed0290", "guess": "unsure", "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.", "model_score": 0.3489, "style_score": 0.3584}
+]
+```
+
+Criterion 4 — one of the ten actual `app.py::appeal` responses:
+
+```json
+{"content_id": "c_f86472473ccb", "message": "Your appeal has been received and is under review.", "status": "under_review"}
+```
+
+Criterion 5 — `app.py::submit` responses, in order: missing text, empty text,
+then text of 10,001 characters:
+
+```json
+[
+  {"error": "bad_request", "message": "Send JSON with a non-empty \"text\"."},
+  {"error": "bad_request", "message": "Send JSON with a non-empty \"text\"."},
+  {"confidence": 0.8321, "content_id": "c_299df5d31d04", "guess": "ai", "label": "We think this was probably written by AI. This can be wrong; if you wrote it, you can appeal.", "model_score": 0.9976, "style_score": 0.6667}
+]
+```
+
+**Diagnoses:** Criterion 1 met exactly at its limit: the ninth sample received
+a high-confidence AI label in all three trials. Criterion 2 misses in the
+combining/scoring stage:
+the measured gap is 0.1359, below 0.20. Criterion 3 misses in the label
+mapping: all three chosen examples score inside the unsure band, so only that
+label is reached. Criterion 5 misses in the route: it rejects missing and
+empty text, but has no maximum-length check, so the 10,001-character request
+reaches both signals and is logged as a completed decision. These are baseline
+measurements; no fixes were made before recording them.
 
 **Diagnoses**
 

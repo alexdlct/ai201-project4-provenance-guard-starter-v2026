@@ -121,6 +121,8 @@ def main():
                     payload = response.json() if response.content else {}
                     results.append({
                         "status": response.status_code,
+                        "response": payload,
+                        "content_id": payload.get("content_id"),
                         "guess": payload.get("guess"),
                         "confidence": payload.get("confidence"),
                         "model_score": payload.get("model_score"),
@@ -131,6 +133,31 @@ def main():
                 except Exception as exc:  # noqa: BLE001
                     results.append({"status": None, "error": f"{type(exc).__name__}: {exc}",
                                     "sent": preview})
+
+            if scenario.get("appeals"):
+                for result in results:
+                    content_id = result.get("content_id")
+                    if not content_id:
+                        result["appeal"] = {"status": None, "error": "submission had no content_id"}
+                        continue
+                    try:
+                        appeal_response = requests.post(
+                            f"{args.url}/appeal",
+                            json={"content_id": content_id,
+                                  "reasoning": "I am appealing this decision for evaluation."},
+                            timeout=args.timeout,
+                        )
+                        appeal_payload = appeal_response.json() if appeal_response.content else {}
+                        result["appeal"] = {
+                            "response": appeal_payload,
+                            "status": appeal_response.status_code,
+                            "content_id": appeal_payload.get("content_id"),
+                            "review_status": appeal_payload.get("status"),
+                            "message": appeal_payload.get("message"),
+                        }
+                    except Exception as exc:  # noqa: BLE001
+                        result["appeal"] = {"status": None,
+                                             "error": f"{type(exc).__name__}: {exc}"}
 
             trials.append(results)
             guesses = [r.get("guess") or "—" for r in results]
