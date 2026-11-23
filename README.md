@@ -415,24 +415,71 @@ original decision, with the same `content_id` and `under_review` status.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 10 submissions per minute, 200 per day, per `creator_id`.
 
-**Why those numbers and not others:**
+**Why those numbers and not others:** A writer can submit drafts and revisions
+without hitting 10 submissions in a minute. The minute limit makes it slower
+for one account to probe scores by sending rapid variations; 200 per day still
+allows many legitimate submissions across a full day.
 <!-- Think about two people: a real writer submitting their own work a few
      times an hour, and a script sending a thousand variations to map your
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** The limiter counts by `creator_id`. If a request
+has no usable creator ID, the key falls back to the caller's network address.
+This local service treats the supplied creator ID as the account boundary.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
+```
 
+The run came from `run_attacks.py::run_flood` and was saved to
+`results/flood_2026-11-22_1932.md`. `GET /health` reported
+`"rate_limiting": true`.
+
+**A decision entry with all nine required fields** from
+`logs/audit.jsonl`:
+
+```json
+{
+  "timestamp": "2026-11-23T03:32:49+00:00",
+  "content_id": "c_ba3b1c1b5d25",
+  "creator_id": "flood_tester",
+  "guess": "human",
+  "model_score": 0.2588,
+  "style_score": 0.4365,
+  "combined_score": 0.3477,
+  "label": "We think this was probably written by a person.",
+  "status": "decided"
+}
+```
+
+The `429` handler logged each rate-limit rejection. I also sent a request
+without `text`; `/submit` returned HTTP 400 and logged that route rejection:
+
+```json
+[
+  {
+    "creator_id": "flood_tester",
+    "event": "rejected",
+    "limit": "10 per 1 minute",
+    "reason": "rate_limited",
+    "status": "rejected",
+    "timestamp": "2026-11-23T03:32:49+00:00"
+  },
+  {
+    "creator_id": "bad_input_demo",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "status": "rejected",
+    "timestamp": "2026-11-23T03:33:15+00:00"
+  }
+]
 ```
 
 ---

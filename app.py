@@ -151,7 +151,7 @@ def health():
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
@@ -201,22 +201,28 @@ def submit():
     """
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
+        audit.log_rejection(creator_id="unknown", reason="invalid_request")
         return jsonify({
             "error": "bad_request",
             "message": "Send a JSON object with text and creator_id fields.",
         }), 400
 
     text = payload.get("text")
-    creator_id = payload.get("creator_id", "unknown")
-    if not isinstance(text, str) or not text.strip():
-        return jsonify({
-            "error": "bad_request",
-            "message": "Send JSON with a non-empty \"text\".",
-        }), 400
-    if not isinstance(creator_id, str) or not creator_id.strip():
+    raw_creator_id = payload.get("creator_id", "unknown")
+    creator_id = raw_creator_id.strip() if isinstance(raw_creator_id, str) and raw_creator_id.strip() else "unknown"
+    if "creator_id" in payload and (
+        not isinstance(raw_creator_id, str) or not raw_creator_id.strip()
+    ):
+        audit.log_rejection(creator_id=creator_id, reason="invalid_creator_id")
         return jsonify({
             "error": "bad_request",
             "message": "Send a non-empty string for \"creator_id\".",
+        }), 400
+    if not isinstance(text, str) or not text.strip():
+        audit.log_rejection(creator_id=creator_id, reason="invalid_text")
+        return jsonify({
+            "error": "bad_request",
+            "message": "Send JSON with a non-empty \"text\".",
         }), 400
 
     # Milestone 3 wires in only signal one. Confidence and label stay explicit
@@ -228,8 +234,10 @@ def submit():
         model_score = detector.model_signal(text)
         style_score = stylometry.style_signal(text)
     except ValueError as exc:
+        audit.log_rejection(creator_id=creator_id, reason="unscorable_text", error=str(exc))
         return jsonify({"error": "bad_request", "message": str(exc)}), 400
     except detector.DetectorUnavailable as exc:
+        audit.log_rejection(creator_id=creator_id, reason="detector_unavailable", error=str(exc))
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
 
     combined_score = scoring.combine_signals(model_score, style_score)
@@ -279,6 +287,7 @@ def appeal():
     payload = request.get_json(silent=True)
     # TODO: delete this and build the route.
     if not isinstance(payload, dict):
+        audit.log_rejection(creator_id="unknown", reason="invalid_appeal_request")
         return jsonify({
             "error": "bad_request",
             "message": "Send a JSON object with content_id and reasoning fields.",
@@ -287,11 +296,17 @@ def appeal():
     content_id = payload.get("content_id")
     reasoning = payload.get("reasoning")
     if not isinstance(content_id, str) or not content_id.strip():
+        audit.log_rejection(creator_id="unknown", reason="invalid_appeal_content_id")
         return jsonify({
             "error": "bad_request",
             "message": "Send a non-empty string for \"content_id\".",
         }), 400
     if not isinstance(reasoning, str) or not reasoning.strip():
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="invalid_appeal_reasoning",
+            content_id=content_id,
+        )
         return jsonify({
             "error": "bad_request",
             "message": "Send a non-empty string for \"reasoning\".",
@@ -302,6 +317,11 @@ def appeal():
         if entry.get("status") == "decided" and not entry.get("event")
     ]
     if not decisions:
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="unknown_content_id",
+            content_id=content_id,
+        )
         return jsonify({
             "error": "bad_request",
             "message": "No submission was found for that content_id.",
