@@ -38,7 +38,76 @@
 
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
+1. The writer sends the text message and a creator_id to the POST /submit endpoint
+2. The route reads the JSON request and checks that text is present and non-empty
+3. The route sends the text to the model signal and the style signal, which measure predictability and writing shape
+4. The scoring rule combines both signal scores into one score
+5. The label mapping turns that score into a guess and a reader-facing label
+6. The service creates a content_id and writes the creator, both signal scores, combined score, guess, label, and status to the audit log
+7. The service returns the content_id, guess, confidence, label, and both signal scores to the caller
 
+### Endpoint shapes
+
+These are the intended JSON contracts for the two endpoints in this project.
+
+**POST `/submit`**
+
+Request fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `text` | string | The writing to assess; required and non-empty. |
+| `creator_id` | string | Identifies the writer for the audit trail; required by the intended contract. |
+
+Success response fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `content_id` | string | Identifier used to refer to this submission, including in an appeal. |
+| `guess` | string | Machine-readable category: `human`, `unsure`, or `ai`. |
+| `confidence` | number | The combined 0–1 score used for the decision. |
+| `label` | string | Reader-facing explanation of the result. |
+| `model_score` | number | 0–1 score from the model signal. |
+| `style_score` | number | 0–1 score from the style signal. |
+
+Invalid input returns HTTP 400 with `error` and `message` strings.
+
+**POST `/appeal`**
+
+Request fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `content_id` | string | ID of an existing submission; required. |
+| `reasoning` | string | The writer's explanation for appealing; required and non-empty. |
+
+Success response fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `content_id` | string | The submission that was appealed. |
+| `status` | string | `under_review` after the appeal is recorded. |
+| `message` | string | Confirmation that the appeal was received. |
+
+An unknown content ID or invalid request should return HTTP 400 with `error` and `message` strings.
+
+### False-positive trace — threshold design scenario
+
+Maya is a real writer who writes a short, plain-English update herself. The
+ordinary vocabulary and predictable sentence patterns make the detector treat
+her writing as AI-like. In this design scenario, her combined score is **0.68**.
+With the current AI threshold of **0.65**, the service would return the
+high-confidence AI label: **“We think this was probably written by AI.”** That
+would be a false positive: the score describes the text's patterns, not who
+wrote it. Maya can submit an appeal with the returned `content_id` and explain
+that she wrote it; the intended appeal flow records the appeal and changes its
+status to `under_review`.
+
+This score and label are illustrative, not a measured run: `/submit` and
+`/appeal` are still being built. This scenario makes the cost of a narrow
+unsure band concrete: a plain-writing human may be accused. The threshold
+decision should favor avoiding that accusation, even if more AI writing lands
+in the unsure range.
 
 
 ---
@@ -53,19 +122,19 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** It measures how predictable the text is to a local GPT-2 language model. `detector.perplexity` calculates the model's surprise at the text, and `detector.model_signal` maps that to a discrete score from 0 to 1. A higher score means the text looks more AI-like to this signal.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** Language models tend to choose likely next words, so generated text may be relatively predictable. Human writing can include less expected wording, which may make it harder for the model to predict.
 
-**What it can't see:**
+**What it can't see:** Predictability does not establish who wrote something. Plain, conventional writing—including writing by a person using familiar vocabulary or writing in a second language—can also be predictable and score as AI-like. Conversely, unusual or specialized human writing can be less predictable. The signal also does not understand authorship or intent.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** It is intended to measure the text's shape rather than its meaning, using sentence-length variation, vocabulary repetition (type-token ratio), and punctuation density. These measures are meant to be combined into a 0–1 score, where higher means more AI-like.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** Generated cadence can have a more even rhythm, with sentences of similar length and less variation in word choice. Human writing often varies more in sentence length and vocabulary, though writing habits differ widely from person to person.
 
-**What it can't see:**
+**What it can't see:** It cannot tell what the text means or who wrote it. Editing sentence breaks, adding or removing punctuation, changing repeated words, or including a quotation can shift these measurements without changing authorship. The measures can also be affected by text length and genre.
 
 ### The combining rule
 

@@ -46,9 +46,13 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. It must name a number. -->
 
+Across each of three trials, no more than 1 of 10 human-written calibration
+samples is labeled high-confidence AI.
 
-
-**Why this target:**
+**Why this target:** A false accusation can damage a writer's trust in the
+service. Allowing one borderline miss recognizes that a small sample and a
+noisy signal cannot guarantee zero false positives, while keeping the target
+strict.
 
 
 
@@ -58,9 +62,13 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
+In each of three trials, the average combined score for the clearly-AI
+calibration samples is at least 0.20 higher than the average for the
+clearly-human samples.
 
-
-**Why this target:**
+**Why this target:** The detector should separate clear examples enough to be
+useful, while a 0.20 gap leaves room for genuinely ambiguous writing to
+overlap instead of pretending the signals can prove authorship.
 
 
 
@@ -70,9 +78,12 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
+Each of the three labels—high-confidence human, unsure, and high-confidence
+AI—is returned by at least one sample in the fixed calibration set in every
+trial.
 
-
-**Why this target:**
+**Why this target:** A label that cannot be reached is dead UI and prevents the
+service from communicating the intended range of certainty.
 
 
 
@@ -82,9 +93,13 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
+For 10 valid appeals with existing content IDs, all 10 responses confirm
+`under_review`, and all 10 appeals appear in the audit log with their
+content ID and reasoning.
 
-
-**Why this target:**
+**Why this target:** An appeal is the writer's route to challenge a wrong
+decision. Requiring both the status change and a durable record makes it
+possible to confirm that the request was received and review it later.
 
 
 
@@ -94,9 +109,13 @@ Two things worth knowing before you pick numbers:
 
 <!-- Your criterion. -->
 
+Requests with missing `text`, empty `text`, or text longer than 10,000
+characters return HTTP 400; none of these rejected requests is sent to either
+signal or logged as a completed decision.
 
-
-**Why this target:**
+**Why this target:** Clear rejection avoids confusing errors and prevents
+needless model work on malformed or excessively large submissions. The
+10,000-character cap gives a concrete boundary that callers can understand.
 
 
 
