@@ -219,11 +219,13 @@ specific limitation to keep in mind when deciding the final labels.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00–0.35 (inclusive) | We think this was probably written by a person. |
+| unsure | Greater than 0.35 and less than 0.65 | We can't tell whether a person or AI wrote this. If you wrote it, you can appeal. |
+| high-confidence AI | 0.65–1.00 (inclusive) | We think this was probably written by AI. This can be wrong; if you wrote it, you can appeal. |
 
-**Why I worded the "unsure" one this way:**
+**Why I worded the "unsure" one this way:** It admits that the system cannot
+tell, avoids implying the writer did anything wrong, and tells them how to
+challenge a result if the work is theirs.
 <!-- It's the hardest of the three. It has to admit uncertainty without
      sounding like an accusation, because the person reading it may well have
      written every word themselves. -->
@@ -234,8 +236,7 @@ specific limitation to keep in mind when deciding the final labels.
 
 ## Sample Run
 
-<!-- Milestone 3 evidence: one submission and the audit log response.
-     The appeal example is completed in Milestone 5. -->
+<!-- Milestones 3–5 evidence: three label results and a recorded appeal. -->
 
 ### First signal on its own
 
@@ -253,98 +254,144 @@ The clearly AI sample scored highest, but the clearly human sample scored
 higher than the borderline one. This is one model signal only; its scores do
 not prove authorship or fully separate the three categories.
 
-**A submission**
+### Submissions that reach all three labels
 
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
+The following requests each returned HTTP 200. The sample text is only a
+calibration input; the label does not establish who wrote it.
+
+**High-confidence human**
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "Time management matters more than people admit, especially now that work moves as fast as it does. If you\u0027re organised you hit deadlines, and you\u0027re less frazzled doing it. A few things actually help. Prioritise — work out what genuinely matters and do that first. Cut the interruptions; notifications wreck focus and the damage is worse than it feels at the time. And take breaks, short ones, often.", "creator_id": "demo_instructor"}'
+  -d '{"text": "Rain. No umbrella—obviously. I took the alley behind the bookshop, where the bricks smell warm after a storm, and found Jo waiting with two coffees; she\u0027d remembered. \"You look awful,\" she said. Fair. The sky cleared, then didn\u0027t. I left the second cup on her desk.", "creator_id": "milestone5_demo"}'
+```
+
+```json
+{
+  "confidence": 0.2463,
+  "content_id": "c_ca174bb84f01",
+  "guess": "human",
+  "label": "We think this was probably written by a person.",
+  "model_score": 0.2987,
+  "style_score": 0.1938
+}
+```
+
+**Unsure**
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/submit \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Time management matters more than people admit, especially now that work moves as fast as it does. If you\u0027re organised you hit deadlines, and you\u0027re less frazzled doing it. A few things actually help. Prioritise — work out what genuinely matters and do that first. Cut the interruptions; notifications wreck focus and the damage is worse than it feels at the time. And take breaks, short ones, often.", "creator_id": "milestone5_demo"}'
 ```
 
 ```json
 {
   "confidence": 0.3537,
-  "content_id": "c_1f7db4c233bb",
+  "content_id": "c_4e197d1e39a0",
   "guess": "unsure",
-  "label": "Combined score calculated; final label not implemented yet.",
+  "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.",
   "model_score": 0.3489,
   "style_score": 0.3584
 }
 ```
 
-I also sent the `clearly_ai` and `clearly_human` request bodies to `/submit`
-with `creator_id` set to `demo_instructor`. Their `model_score` values were
-`0.7544` and `0.4445`. Each response now contains the model score, style score,
-combined score in `confidence`, and the still-placeholder `unsure` guess. The
-borderline response above was captured with live `curl` and returned HTTP 200.
-
-**An appeal**
+**High-confidence AI**
 
 ```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
+$ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
-```
-
-```json
-
-```
-
-**What the log shows afterwards**
-
-```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+  -d '{"text": "Today was a good day. It was a good day at work. The work was good. The day was good. It was good because the work went well. The team worked well. The work was good. It was a good day.", "creator_id": "milestone5_demo"}'
 ```
 
 ```json
 {
-  "count": 3,
+  "confidence": 0.7478,
+  "content_id": "c_a957d96bdb92",
+  "guess": "ai",
+  "label": "We think this was probably written by AI. This can be wrong; if you wrote it, you can appeal.",
+  "model_score": 0.9431,
+  "style_score": 0.5524
+}
+```
+
+### An appeal
+
+For this test, the sample and appeal reason are synthetic; the `content_id`
+comes from the live submission above. I appealed the human-range result:
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/appeal \
+  -H "Content-Type: application/json" \
+  -d '{"content_id": "c_ca174bb84f01", "reasoning": "I wrote this myself; the abrupt sentences and unusual punctuation are part of my voice."}'
+```
+
+```json
+{
+  "content_id": "c_ca174bb84f01",
+  "message": "Your appeal has been received and is under review.",
+  "status": "under_review"
+}
+```
+
+### What `/log` shows afterwards
+
+```bash
+$ curl "http://127.0.0.1:5000/log?limit=4"
+```
+
+```json
+{
+  "count": 4,
   "entries": [
     {
+      "combined_score": 0.2463,
+      "content_id": "c_ca174bb84f01",
+      "creator_id": "milestone5_demo",
+      "guess": "human",
+      "label": "We think this was probably written by a person.",
+      "model_score": 0.2987,
+      "status": "decided",
+      "style_score": 0.1938,
+      "timestamp": "2026-11-23T03:12:53+00:00"
+    },
+    {
       "combined_score": 0.3537,
-      "content_id": "c_1f7db4c233bb",
-      "creator_id": "demo_instructor",
+      "content_id": "c_4e197d1e39a0",
+      "creator_id": "milestone5_demo",
       "guess": "unsure",
-      "label": null,
+      "label": "We can't tell whether a person or AI wrote this. If you wrote it, you can appeal.",
       "model_score": 0.3489,
       "status": "decided",
       "style_score": 0.3584,
-      "timestamp": "2026-11-23T02:52:18+00:00"
+      "timestamp": "2026-11-23T03:13:12+00:00"
     },
     {
-      "combined_score": 0.588,
-      "content_id": "c_c10e97ac5aaa",
-      "creator_id": "demo_instructor",
-      "guess": "unsure",
-      "label": null,
-      "model_score": 0.7544,
+      "combined_score": 0.7478,
+      "content_id": "c_a957d96bdb92",
+      "creator_id": "milestone5_demo",
+      "guess": "ai",
+      "label": "We think this was probably written by AI. This can be wrong; if you wrote it, you can appeal.",
+      "model_score": 0.9431,
       "status": "decided",
-      "style_score": 0.4216,
-      "timestamp": "2026-11-23T02:55:16+00:00"
+      "style_score": 0.5524,
+      "timestamp": "2026-11-23T03:13:13+00:00"
     },
     {
-      "combined_score": 0.3588,
-      "content_id": "c_7ad73ce53871",
-      "creator_id": "demo_instructor",
-      "guess": "unsure",
-      "label": null,
-      "model_score": 0.4445,
-      "status": "decided",
-      "style_score": 0.273,
-      "timestamp": "2026-11-23T02:55:17+00:00"
+      "content_id": "c_ca174bb84f01",
+      "creator_id": "milestone5_demo",
+      "event": "appeal",
+      "reasoning": "I wrote this myself; the abrupt sentences and unusual punctuation are part of my voice.",
+      "status": "under_review",
+      "timestamp": "2026-11-23T03:14:43+00:00"
     }
   ]
 }
 ```
 
-This `/log` response was also captured with live `curl` and returned HTTP 200;
-it shows both signal scores and the combined score for all three instructor
-samples.
+The live `/log` request returned HTTP 200 and shows the appeal event after the
+original decision, with the same `content_id` and `under_review` status.
 
 ---
 
