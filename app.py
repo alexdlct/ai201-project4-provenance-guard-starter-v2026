@@ -224,6 +224,17 @@ def submit():
             "error": "bad_request",
             "message": "Send JSON with a non-empty \"text\".",
         }), 400
+    if len(text) > 10000:
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="text_too_long",
+            max_length=10000,
+            actual_length=len(text),
+        )
+        return jsonify({
+            "error": "bad_request",
+            "message": "Text must be 10,000 characters or fewer.",
+        }), 400
 
     # Milestone 3 wires in only signal one. Confidence and label stay explicit
     # placeholders until the combining rule and label mapping are built.
