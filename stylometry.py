@@ -32,6 +32,7 @@ anything together:
 
 import re
 import statistics
+import unicodedata
 
 
 def sentences(text: str) -> list[str]:
@@ -65,7 +66,14 @@ def sentence_length_spread(text: str) -> float:
     before the attack set decides for you.
     """
     # TODO: replace this
-    return 0.0
+    lengths = [len(words(sentence)) for sentence in sentences(text)]
+    lengths = [length for length in lengths if length > 0]
+    if len(lengths) < 2:
+        return 0.0
+    mean = statistics.mean(lengths)
+    if mean == 0:
+        return 0.0
+    return statistics.pstdev(lengths) / mean
 
 
 def type_token_ratio(text: str) -> float:
@@ -81,7 +89,10 @@ def type_token_ratio(text: str) -> float:
     that alone can look like a signal.
     """
     # TODO: replace this
-    return 0.0
+    tokens = words(text)
+    if not tokens:
+        return 0.0
+    return len(set(tokens)) / len(tokens)
 
 
 def punctuation_density(text: str) -> float:
@@ -95,7 +106,14 @@ def punctuation_density(text: str) -> float:
         writers.
     """
     # TODO: replace this
-    return 0.0
+    tokens = words(text)
+    if not tokens:
+        return 0.0
+    punctuation = sum(
+        1 for character in text
+        if unicodedata.category(character).startswith("P")
+    )
+    return punctuation / len(tokens)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -123,7 +141,14 @@ def style_signal(text: str) -> float:
     to signal one, and it is plain writing that gets accused.
     """
     # TODO: replace this
-    return 0.5
+    spread = sentence_length_spread(text)
+    vocabulary_variety = type_token_ratio(text)
+    punctuation = punctuation_density(text)
+
+    even_cadence = 1.0 / (1.0 + spread)
+    repeated_vocabulary = 1.0 - vocabulary_variety
+    sparse_punctuation = 1.0 - min(punctuation / 0.25, 1.0)
+    return round((even_cadence + repeated_vocabulary + sparse_punctuation) / 3.0, 4)
 
 
 if __name__ == "__main__":
@@ -139,4 +164,4 @@ if __name__ == "__main__":
     print(f"type_token_ratio         {type_token_ratio(text)}")
     print(f"punctuation_density      {punctuation_density(text)}")
     print(f"style_signal             {style_signal(text)}   (higher = more likely AI)")
-    print("\nAll zeros? These are stubs — Milestone 4 is where you build them.")
+    print("\nEach measure is a text-shape proxy, not proof of authorship.")

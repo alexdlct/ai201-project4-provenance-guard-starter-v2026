@@ -222,22 +222,28 @@ def submit():
     # Milestone 3 wires in only signal one. Confidence and label stay explicit
     # placeholders until the combining rule and label mapping are built.
     import detector
+    import scoring
+    import stylometry
     try:
         model_score = detector.model_signal(text)
+        style_score = stylometry.style_signal(text)
     except ValueError as exc:
         return jsonify({"error": "bad_request", "message": str(exc)}), 400
     except detector.DetectorUnavailable as exc:
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
 
+    combined_score = scoring.combine_signals(model_score, style_score)
     content_id = f"c_{uuid.uuid4().hex[:12]}"
     guess = "unsure"
-    confidence = 0.5
-    label = "Signal one only; final label not implemented yet."
+    confidence = combined_score
+    label = "Combined score calculated; final label not implemented yet."
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
         guess=guess,
         model_score=model_score,
+        style_score=style_score,
+        combined_score=combined_score,
         status="decided",
     )
     return jsonify({
@@ -246,7 +252,7 @@ def submit():
         "confidence": confidence,
         "label": label,
         "model_score": model_score,
-        "style_score": None,
+        "style_score": style_score,
     }), 200
 
 

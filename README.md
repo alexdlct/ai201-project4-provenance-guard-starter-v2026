@@ -103,8 +103,9 @@ wrote it. Maya can submit an appeal with the returned `content_id` and explain
 that she wrote it; the intended appeal flow records the appeal and changes its
 status to `under_review`.
 
-This score and label are illustrative, not a measured run: `/submit` and
-`/appeal` are still being built. This scenario makes the cost of a narrow
+This score and label are illustrative, not a measured false positive. `/submit`
+now returns both signals and their combined score, but the final label mapping
+and `/appeal` are still to come. This scenario makes the cost of a narrow
 unsure band concrete: a plain-writing human may be accused. The threshold
 decision should favor avoiding that accusation, even if more AI writing lands
 in the unsure range.
@@ -130,9 +131,9 @@ in the unsure range.
 
 ### Signal two — the style signal
 
-**What it measures:** It is intended to measure the text's shape rather than its meaning, using sentence-length variation, vocabulary repetition (type-token ratio), and punctuation density. These measures are meant to be combined into a 0–1 score, where higher means more AI-like.
+**What it measures:** It measures text shape rather than meaning. `stylometry.sentence_length_spread` is the population standard deviation of sentence word counts divided by their mean. `stylometry.type_token_ratio` is unique words divided by total words. `stylometry.punctuation_density` is punctuation characters per word. `stylometry.style_signal` averages three 0–1 components: `1 / (1 + spread)`, `1 - type_token_ratio`, and `1 - min(punctuation_density / 0.25, 1)`. Higher scores mean more AI-like to this signal.
 
-**Why that might differ between human and AI writing:** Generated cadence can have a more even rhythm, with sentences of similar length and less variation in word choice. Human writing often varies more in sentence length and vocabulary, though writing habits differ widely from person to person.
+**Why that might differ between human and AI writing:** Generated cadence can have a more even rhythm, with sentences of similar length and less variation in word choice. Human writing often varies more in sentence length and vocabulary, though writing habits differ widely from person to person. The component directions are explicit: lower sentence variation, lower vocabulary variety, and lower punctuation density each raise the score.
 
 **What it can't see:** It cannot tell what the text means or who wrote it. Editing sentence breaks, adding or removing punctuation, changing repeated words, or including a quotation can shift these measurements without changing authorship. The measures can also be affected by text length and genre.
 
@@ -141,16 +142,69 @@ in the unsure range.
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:**
+**The rule:** Take the weighted average of the two signals. When they disagree, the combined score moves toward the middle, reflecting uncertainty instead of letting either signal decide on its own.
 
-**The numbers:**
+**The numbers:** `0.5 × model_score + 0.5 × style_score`. Each signal has equal weight.
 
 **Where it lives:** `scoring.py::combine_signals`
 
 <!-- ⚠️ The grader checks your code against that line. If your rule lives
      somewhere else, say where. -->
 
-**A case where my two signals split, and what my rule does with it:**
+**A case where my two signals split, and what my rule does with it:** On the instructor's `clearly_ai` sample, the model score is **0.7544** and style score is **0.4216**. Their equal-weight average is **0.5880**, in the current unsure band. The style signal pulls back from a high-confidence AI decision, which favors avoiding a wrong accusation but lets some AI writing remain unsure.
+
+### Milestone 4 calibration results
+
+Both signals were run on the same three instructor samples. Scores are 0–1;
+higher means more AI-like. Combined scores use the equal weights above.
+
+| Sample | Model | Style | Combined | What the two signals show |
+|---|---:|---:|---:|---|
+| `borderline` | 0.3489 | 0.3584 | 0.3537 | They agree near the human end. |
+| `clearly_ai` | 0.7544 | 0.4216 | 0.5880 | They split; averaging puts it in the unsure band. |
+| `clearly_human` | 0.4445 | 0.2730 | 0.3588 | Both stay below the midpoint, though model is less human-leaning. |
+
+I also tried four calibration cases: the instructor's clearly AI sample, the
+clearly human sample, a formal human paragraph, and a lightly edited version
+of the clearly AI paragraph (changing “cannot” to “can't”). The two latter
+cases are useful stress checks: formality can look uniform to a style measure,
+and a small edit can move style features without changing authorship.
+
+| Calibration case | Model | Style | Combined |
+|---|---:|---:|---:|
+| Clearly AI | 0.7544 | 0.4216 | 0.5880 |
+| Clearly human | 0.4445 | 0.2730 | 0.3588 |
+| Formal human | 0.5263 | 0.5578 | 0.5421 |
+| Lightly edited AI | 0.7620 | 0.4071 | 0.5846 |
+
+<details>
+<summary>Calibration input text</summary>
+
+**Formal human**
+
+> The applicant submitted the revised report on Tuesday. The review team
+> checked the figures and confirmed that the proposed schedule is achievable.
+> The next review will take place after the final materials have been received.
+
+**Lightly edited AI** — the instructor's clearly AI sample with “cannot”
+changed to “can't”
+
+> The importance of effective time management can't be overstated in today's
+> fast-paced work environment. Professionals who develop strong organizational
+> habits are better positioned to meet deadlines and reduce stress. There are
+> several key strategies that can help individuals improve their productivity.
+> First, prioritization is essential. By identifying the most important tasks
+> and addressing them first, workers can ensure that critical objectives are
+> met. Second, minimizing distractions plays a significant role. Setting aside
+> dedicated blocks of time for concentrated work is widely considered
+> beneficial. Finally, regular breaks are important for maintaining
+> performance.
+
+</details>
+
+The formal human sample scores above the midpoint on both signals, though it
+does not cross the current 0.65 high-confidence AI threshold. That is a
+specific limitation to keep in mind when deciding the final labels.
 
 
 
@@ -214,21 +268,20 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 
 ```json
 {
-  "confidence": 0.5,
-  "content_id": "c_95fdf8c7a458",
+  "confidence": 0.3537,
+  "content_id": "c_1f7db4c233bb",
   "guess": "unsure",
-  "label": "Signal one only; final label not implemented yet.",
+  "label": "Combined score calculated; final label not implemented yet.",
   "model_score": 0.3489,
-  "style_score": null
+  "style_score": 0.3584
 }
 ```
 
 I also sent the `clearly_ai` and `clearly_human` request bodies to `/submit`
 with `creator_id` set to `demo_instructor`. Their `model_score` values were
-`0.7544` and `0.4445`; all three responses had placeholder confidence `0.5`,
-guess `unsure`, and label `Signal one only; final label not implemented yet.`
-The borderline response above was captured with live `curl` and returned HTTP
-200.
+`0.7544` and `0.4445`. Each response now contains the model score, style score,
+combined score in `confidence`, and the still-placeholder `unsure` guess. The
+borderline response above was captured with live `curl` and returned HTTP 200.
 
 **An appeal**
 
@@ -253,44 +306,45 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
   "count": 3,
   "entries": [
     {
-      "combined_score": null,
-      "content_id": "c_c2e53816811c",
-      "creator_id": "demo_instructor",
-      "guess": "unsure",
-      "label": null,
-      "model_score": 0.7544,
-      "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-11-23T02:31:37+00:00"
-    },
-    {
-      "combined_score": null,
-      "content_id": "c_bdd36187626c",
-      "creator_id": "demo_instructor",
-      "guess": "unsure",
-      "label": null,
-      "model_score": 0.4445,
-      "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-11-23T02:31:37+00:00"
-    },
-    {
-      "combined_score": null,
-      "content_id": "c_95fdf8c7a458",
+      "combined_score": 0.3537,
+      "content_id": "c_1f7db4c233bb",
       "creator_id": "demo_instructor",
       "guess": "unsure",
       "label": null,
       "model_score": 0.3489,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-11-23T02:36:42+00:00"
+      "style_score": 0.3584,
+      "timestamp": "2026-11-23T02:52:18+00:00"
+    },
+    {
+      "combined_score": 0.588,
+      "content_id": "c_c10e97ac5aaa",
+      "creator_id": "demo_instructor",
+      "guess": "unsure",
+      "label": null,
+      "model_score": 0.7544,
+      "status": "decided",
+      "style_score": 0.4216,
+      "timestamp": "2026-11-23T02:55:16+00:00"
+    },
+    {
+      "combined_score": 0.3588,
+      "content_id": "c_7ad73ce53871",
+      "creator_id": "demo_instructor",
+      "guess": "unsure",
+      "label": null,
+      "model_score": 0.4445,
+      "status": "decided",
+      "style_score": 0.273,
+      "timestamp": "2026-11-23T02:55:17+00:00"
     }
   ]
 }
 ```
 
 This `/log` response was also captured with live `curl` and returned HTTP 200;
-it contains the `content_id` from the successful submission above.
+it shows both signal scores and the combined score for all three instructor
+samples.
 
 ---
 
